@@ -85,6 +85,15 @@ export var dataInterface;
         url: `${ROOT_URL}/api/v2/assets/?q=asset_type:template`
       });
     },
+    callKobocatAPI (url) {
+      return $ajax({
+         url: url ,
+         crossDomain: true,
+         xhrFields: {
+            withCredentials: true
+         }
+  });
+    }    
     listCollections () {
       return $.getJSON(`${ROOT_URL}/api/v2/collections/?all_public=true`);
     },

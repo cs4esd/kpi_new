@@ -134,6 +134,7 @@ module.exports = do ->
       @warnings = options.warnings || []
       @__rowViews = new Backbone.Model()
       @ngScope = options.ngScope
+      @appState = options.appState
       @surveyStateStore = options.stateStore || {trigger:$.noop, setState:$.noop}
 
       $(document).on 'click', @deselect_rows

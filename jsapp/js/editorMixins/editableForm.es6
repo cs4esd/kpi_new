@@ -61,6 +61,8 @@ export default assign({
           settings__style: asset.settings__style,
           asset_uid: asset.uid,
           asset_type: asset.asset_type,
+          deployment_id: asset.deployment__identifier,
+          asset_url: asset.url
         });
       });
     } else {
@@ -424,26 +426,76 @@ export default assign({
       _state.surveyAppRendered = false;
     }
 
-    if (!_state.surveyLoadError) {
-      _state.surveyAppRendered = true;
+    // Call kobocat API to get media metadata so that available media files can be shown in select widget in form
+    // access to kobocat API will only work if CORS changes made /kobo-docker/nginx/nginx_site_default.conf.tmpl
+    //    add_header Access-Control-Allow-Origin http://kf.kobo.local always;
+    //    add_header Vary Origin always;
+    //    add_header Access-Control-Allow-Credentials true always;
 
-      var skp = new SurveyScope({
-        survey: survey
-      });
-      this.app = new dkobo_xlform.view.SurveyApp({
-        survey: survey,
-        stateStore: stores.surveyState,
-        ngScope: skp,
-      });
-      this.app.$el.appendTo(ReactDOM.findDOMNode(this.refs['form-wrap']));
-      this.app.render();
-      survey.rows.on('change', this.onSurveyChange);
-      survey.rows.on('sort', this.onSurveyChange);
-      survey.on('change', this.onSurveyChange);
+    // TODO: NEED BETTER WAY TO GET KC URL
+
+    let url = new URL("http://kc.domain") ;
+    if(arguments.length == 2 && arguments[1].asset_url)
+    {
+        let deploymentURL = new URL("" + arguments[1].asset_url);
+        let deployment_hostname = deploymentURL.hostname ; 
+        deployment_hostname = "kc" + deployment_hostname.slice(2) ;
+        url =  new URL(deploymentURL.protocol + "//"+  deployment_hostname + "/api/v1/forms?format=json&id_string=" + _state.asset_uid) ;
+  }
+
+  dataInterface.callKobocatAPI(url).done( (content) => {   
+    if(content.length > 0)
+    {
+       // filer out jsut media metadata records
+       const mediametadata = content[0].metadata.filter( metadata => metadata.data_type === "media"); 
+        _state.mediametadata =  mediametadata ;  
     }
 
+    if (!_state.surveyLoadError) {
+         _state.surveyAppRendered = true;
+
+        var skp = new SurveyScope({
+            survey: survey
+        });
+        this.app = new dkobo_xlform.view.SurveyApp({
+            survey: survey,
+            stateStore: stores.surveyState,
+            ngScope: skp,
+            appState: _state
+          });
+        this.app.$el.appendTo(ReactDOM.findDOMNode(this.refs['form-wrap']));
+        this.app.render();
+        survey.rows.on('change', this.onSurveyChange);
+        survey.rows.on('sort', this.onSurveyChange);
+        survey.on('change', this.onSurveyChange);
+    }
     this.setState(_state);
-  },
+
+}).fail ( (err) => {
+
+        _state.surveyAppRendered = true;
+
+        var skp = new SurveyScope({
+            survey: survey
+        });
+        this.app = new dkobo_xlform.view.SurveyApp({
+            survey: survey,
+            stateStore: stores.surveyState,
+            ngScope: skp,
+            appState: _state
+          });
+        this.app.$el.appendTo(ReactDOM.findDOMNode(this.refs['form-wrap']));
+        this.app.render();
+        survey.rows.on('change', this.onSurveyChange);
+        survey.rows.on('sort', this.onSurveyChange);
+        survey.on('change', this.onSurveyChange);
+// _state.surveyLoadWarning = "Could not load mediametadata from kobocat" ; 
+ this.setState(_state);        
+
+}) ;
+
+
+},
 
   clearPreviewError() {
     this.setState({
