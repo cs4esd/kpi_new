@@ -100,6 +100,8 @@ module.exports = do ->
     geopoint:
       label:
         value: "Record your current location"
+      apperance:
+        value: "placement-map"
       required:
         value: false
         _hideUnlessChanged: true
