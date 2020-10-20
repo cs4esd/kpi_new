@@ -451,10 +451,21 @@ export default assign({
     });
   },
 
+ // clean up reference to default response map for geopoint widget
+ removeDefaultResponseMap(){
+  let mapcontainer = $('#default-response-map');   
+  if (mapcontainer.length > 0 && mapcontainer[0]._leaflet_map)
+  {          
+     let map = mapcontainer[0]._leaflet_map;
+     map.remove();
+  }   
+},
+
   // navigating out of form builder
 
   safeNavigateToRoute(route) {
     if (!this.needsSave()) {
+      this.removeDefaultResponseMap();
       hashHistory.push(route);
     } else {
       let dialog = alertify.dialog('confirm');
@@ -463,6 +474,7 @@ export default assign({
         message: '',
         labels: {ok: t('Yes, leave form'), cancel: t('Cancel')},
         onok: () => {
+          this.removeDefaultResponseMap()
           hashHistory.push(route);
         },
         oncancel: dialog.destroy

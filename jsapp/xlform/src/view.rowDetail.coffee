@@ -6,9 +6,42 @@ $viewUtils = require './view.utils'
 $icons = require './view.icons'
 $hxl = require './view.rowDetail.hxlDict'
 
+require '@mapbox/leaflet-omnivore';
+L = require 'leaflet/dist/leaflet';
+require 'leaflet/dist/leaflet.css';
+require 'leaflet.markercluster/dist/leaflet.markercluster';
+require 'leaflet.markercluster/dist/MarkerCluster.css';
+
 $viewRowDetailSkipLogic = require './view.rowDetail.SkipLogic'
 $viewTemplates = require './view.templates'
 _t = require('utils').t
+
+
+streets = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    subdomains: ['a', 'b', 'c']
+  }
+);
+
+baseLayers = {
+  OpenStreetMap: streets,
+  OpenTopoMap: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data: &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+  }),
+  'ESRI World Imagery': L.tileLayer(
+    'http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }),
+  Humanitarian: L.tileLayer(
+    'https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      attribution: 'Tiles &copy; Humanitarian OpenStreetMap Team &mdash; &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  })
+};
+
+controls = L.control.layers(baseLayers);
+
 
 module.exports = do ->
   viewRowDetail = {}
@@ -27,10 +60,31 @@ module.exports = do ->
       _.extend(@, viewRowDetail.DetailViewMixins[@model.key] || viewRowDetail.DetailViewMixins.default)
       @$el.addClass(@extraClass)
 
+    mapModal: (opts={})->
+
+         el = opts.el || @$('input[name="default"]')
+         $el = $(el)
+
+         $el.on 'change', (changeEvnt)=>
+
+            mapcontainer = $('#default-response-map');   
+            map = mapcontainer[0]._leaflet_map;  
+            marker = map._marker ;
+
+            defaultinput = $('input[name="default"]')
+            coords = defaultinput[0].value.split(" ");
+            marker.setLatLng(new L.LatLng(coords[0], coords[1]),{draggable:'true'});
+            map.flyTo(coords);
+
+
     render: ()->
       rendered = @html()
       if rendered
         @$el.html rendered
+
+      if @model.key == "default"
+        console.log("default row rendered")
+
 
       @afterRender && @afterRender()
       @
@@ -111,6 +165,12 @@ module.exports = do ->
   viewRowDetail.Templates = {
     textbox: (cid, key, key_label = key, input_class = '') ->
       @field """<input type="text" name="#{key}" id="#{cid}" class="#{input_class}" />""", cid, key_label
+
+    textWithMap: (cid, key, key_label = key, input_class = '') ->
+      tags = """<input type="text"  name="#{key}" id="#{cid}" class="#{input_class}" />""" 
+      tags += """<div id="default-response-map" class="map map-home leaflet-container leaflet-touch leaflet-fade-anim leaflet-grab leaflet-touch-drag leaflet-touch-zoom" style="height: 300px; margin-top: 10px; position: relative; outline: none;" tabindex="0">"""
+      @field tags, cid, key_label
+
 
     checkbox: (cid, key, key_label = key, input_label = _t("Yes")) ->
       input_label = input_label
@@ -377,11 +437,26 @@ module.exports = do ->
     html: ->
       @fieldTab = "active"
       @$el.addClass("card__settings__fields--#{@fieldTab}")
+      model = @model
+      modeltype = @model._parent.getValue('type')
+      console.log("view row detail" + model.key )
       label = if @model.key == 'default' then _t("Default response") else @model.key.replace(/_/g, ' ')
-      viewRowDetail.Templates.textbox @cid, @model.key, label, 'text'
+
+      if modeltype == "geopoint" 
+         return viewRowDetail.Templates.textWithMap @cid, @model.key, label, 'testWithMap'  
+      else
+         return  viewRowDetail.Templates.textbox @cid, @model.key, label, 'text'
+
     afterRender: ->
       @$el.find('input').eq(0).val(@model.get("value"))
-      @listenForInputChange()
+      defaultValue = @model.get("value")
+      modeltype = @model._parent.getValue('type')
+      if modeltype == "geopoint" 
+         @mapModal( { dval: defaultValue } )
+         @listenForInputChange()
+
+      else  
+         @listenForInputChange()
 
   viewRowDetail.DetailViewMixins.calculation =
     html: -> false

@@ -16,6 +16,40 @@ renderKobomatrix = require('js/formbuild/renderInBackbone').renderKobomatrix
 _t = require('utils').t
 alertify = require 'alertifyjs'
 
+L = require 'leaflet/dist/leaflet';
+L.Map.addInitHook ()->
+            this.getContainer()._leaflet_map = this;
+
+
+streets = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    subdomains: ['a', 'b', 'c']
+  }
+);
+
+baseLayers = {
+  OpenStreetMap: streets,
+  OpenTopoMap: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data: &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+  }),
+  'ESRI World Imagery': L.tileLayer(
+    'http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }),
+  Humanitarian: L.tileLayer(
+    'https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      attribution: 'Tiles &copy; Humanitarian OpenStreetMap Team &mdash; &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  })
+};
+
+
+
+controls = L.control.layers(baseLayers);
+
+
+
 module.exports = do ->
   class BaseRowView extends Backbone.View
     tagName: "li"
@@ -25,6 +59,8 @@ module.exports = do ->
 
     initialize: (opts)->
       @options = opts
+      @map = {} ;
+      @marker = {} ;
       typeDetail = @model.get("type")
       @$el.attr("data-row-id", @model.cid)
       @ngScope = opts.ngScope
@@ -118,7 +154,46 @@ module.exports = do ->
         @$card.addClass('card--expanded-settings')
         @hideMultioptions?()
         @_settingsExpanded = true
+
+        if @model.attributes.type.getValue() == "geopoint" 
+
+            @map = L.map('default-response-map', {maxZoom: 17, scrollWheelZoom: false, preferCanvas: true });
+
+            streets.addTo(@map);
+            controls.addTo(@map);
+
+            if @model.attributes.default.getValue()
+                coords = @model.attributes.default.getValue().split(" ");
+            else 
+                coords = [52.596303, -3.854101] ; # default to Machynlleth
+            @map.setView(coords, 12);
+            console.log("map set")
+            @marker = new L.marker(coords, {draggable:'true', bubblingMouseEvents:'true'});
+
+            @marker.on 'dragend', (event)=>
+               marker = event.target;
+               position = marker.getLatLng();
+               #update the default input box with marker position
+               defaultinput = $('input[name="default"]')       
+               defaultinput[0].value = "" + position.lat.toFixed(6) + " " +
+                                            position.lng.toFixed(6) 
+
+
+               #marker.setLatLng(new L.LatLng(position.lat, position.lng) );
+               @map.flyTo(new L.LatLng(position.lat, position.lng));    
+               @model.attributes.default.set('value', defaultinput[0].value);
+
+            # cache the marker layer in map object so it can be retrieved in view.rowDetail methods 
+            @marker.on 'add', (event)=>
+               marker = event.target;
+               @map._marker = marker ;
+
+            @map.addLayer(@marker);
+
+
       else if !show and @_settingsExpanded
+        if @model.attributes.type.getValue() == "geopoint" and @map.options
+            @map.remove()
         @$card.removeClass('card--expanded-settings')
         @_cleanupExpandedRender()
         @_settingsExpanded = false
