@@ -93,7 +93,7 @@ export var dataInterface;
             withCredentials: true
          }
   });
-    }    
+    },    
     listCollections () {
       return $.getJSON(`${ROOT_URL}/api/v2/collections/?all_public=true`);
     },
